@@ -1,0 +1,772 @@
+{
+  "name": "Support Ticket Triage System",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Customer Support",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "First Name",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Last Name",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Email",
+              "fieldType": "email",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Message",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Plan",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.5,
+      "position": [
+        -304,
+        -240
+      ],
+      "id": "f34b130c-e986-492e-ad27-72b95cf33900",
+      "name": "On form submission",
+      "webhookId": "570254fe-6bd6-45b4-8301-43fa0a6f7e49"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Customer: {{ $json['First Name'] }} {{ $json['Last Name'] }}\nEmail: {{ $json.Email }}\nPlan: {{ $json.Plan }}\nMessage: {{ $json.Message }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=You are a support operations AI. When given a customer support ticket, you must:\n\n1. Categorize it into exactly one of: Billing, Technical, Feature Request, General\n2. Assign priority: High (urgent language, business impact), Medium (general issue), Low (question or feature request)\n3. Extract the core issue in one sentence\n4. Write a professional, empathetic first-response email that:\n   - Acknowledges their specific issue\n   - Sets expectations (team will respond within X hours based on priority: High = 1hr, Medium = 4hr, Low = 24hr)\n   - Sounds human, not robotic"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -80,
+        -240
+      ],
+      "id": "964af0d3-9d71-4b74-bb26-fc9b722f12e9",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"category\": \"Technical\",\n  \"priority\": \"High\",\n  \"core_issue\": \"Customer having issue logging into the account since 2 hours\",\n  \"response_email_subject\": \"Re: Can't access my account\",\n  \"response_email_body\": \"Full email body here...\"\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        64,
+        -16
+      ],
+      "id": "ed3ccb81-dda0-43ac-a672-541ce470e4e1",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "model": "google/gemini-3-flash-preview",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        -16
+      ],
+      "id": "36b2e4a1-a332-4014-8608-17014e782a7f",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "LWj83cQr8QanKSOo",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "43d76450-9eeb-463b-a709-e49d88a1ec67",
+              "leftValue": "={{ $('AI Agent').item.json.output.priority }}",
+              "rightValue": "High",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        944,
+        -240
+      ],
+      "id": "dc184677-dc61-45cb-a969-44a3db6b56d4",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "31825c0e-a33b-802a-8e7e-f5e0922c362d",
+          "mode": "list",
+          "cachedResultName": "Support Tickets",
+          "cachedResultUrl": "https://www.notion.so/31825c0ea33b802a8e7ef5e0922c362d"
+        },
+        "simple": false,
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Customer Name|title",
+              "title": "={{ $('On form submission').item.json[\"First Name\"] }}{{ $('On form submission').item.json[\"Last Name\"] }}"
+            },
+            {
+              "key": "Customer Email|email",
+              "emailValue": "={{ $('On form submission').item.json.Email }}"
+            },
+            {
+              "key": "Category|rich_text",
+              "textContent": "={{ $('AI Agent').item.json.output.category }}"
+            },
+            {
+              "key": "Core Issue|rich_text",
+              "textContent": "={{ $('AI Agent').item.json.output.core_issue }}"
+            },
+            {
+              "key": "Date Received|date",
+              "includeTime": false,
+              "date": "={{ new Date($('On form submission').item.json.submittedAt).toISOString().split('T')[0] }}"
+            },
+            {
+              "key": "Priority|rich_text",
+              "textContent": "={{ $('AI Agent').item.json.output.priority }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        496,
+        -240
+      ],
+      "id": "29cf6663-dc6f-4da6-8a14-4ab54f6547a1",
+      "name": "Create a database page",
+      "credentials": {
+        "notionApi": {
+          "id": "ar5uPR6Oiu6uPOcZ",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "={{ $json.output.category }}",
+          "mode": "name"
+        },
+        "text": "={{ $json.output.core_issue }}",
+        "otherOptions": {
+          "includeLinkToWorkflow": false
+        }
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        1168,
+        -240
+      ],
+      "id": "344ec077-9318-4d07-93e5-bbee3f1f4fd7",
+      "name": "Alert to Specific Department Channel",
+      "webhookId": "24b23898-bb51-4413-94d2-91831514765b",
+      "credentials": {
+        "slackApi": {
+          "id": "0ar1yZ5bLcwIXc4R",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#supporttickets",
+          "mode": "name"
+        },
+        "text": "=🎫 *New {{ $('AI Agent').item.json.output.priority }} Priority Ticket* \n*Customer:* {{ $('On form submission').item.json[\"First Name\"] }}{{ $('On form submission').item.json['Last Name'] }}\n*Category:* {{ $('AI Agent').item.json.output.category }}\n*Issue:* {{ $('If').item.json.output.core_issue }} \n*Email:* {{ $('On form submission').item.json.Email }}\nView in Notion → https://www.notion.so/31825c0ea33b802a8e7ef5e0922c362d?v=31825c0ea33b800a9279000c57bd657f&source=copy_link",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        720,
+        -240
+      ],
+      "id": "81c13215-eaa4-4fe6-a2f1-f11dc9c8ae67",
+      "name": "General Support Ticket Notification",
+      "webhookId": "a436c0cd-3aba-44e0-b7d2-2f229737b274",
+      "credentials": {
+        "slackApi": {
+          "id": "0ar1yZ5bLcwIXc4R",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "draft",
+        "subject": "={{ $json.output.response_email_subject }}",
+        "message": "={{ $json.output.response_email_body }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        272,
+        -240
+      ],
+      "id": "97e3d190-cc6b-4cee-b140-de7b4c8b13b5",
+      "name": "Draft first response",
+      "webhookId": "43b9c9d0-5a8d-47e7-9fe9-975e60a949cb",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "DDfWNylRpFj1Z2OZ",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "On form submission": [
+      {
+        "json": {
+          "First Name": "Kiran",
+          "Last Name": "Patel",
+          "Email": "kp1125patel@gmail.com",
+          "Message": "We are experiencing intermittent failures with our webhook trigger in the production environment. The webhook successfully receives payloads from the third-party application, but the workflow does not always execute downstream nodes. This issue started approximately 24 hours ago.",
+          "Plan": "Basic",
+          "submittedAt": "2026-03-03T14:04:23.321-05:00",
+          "formMode": "test"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "AI Agent": [
+      {
+        "json": {
+          "output": {
+            "category": "Technical",
+            "priority": "High",
+            "core_issue": "Inconsistent execution of workflow downstream nodes following successful webhook payload delivery in production.",
+            "response_email_subject": "Re: Intermittent Webhook Trigger Failures in Production - Case #92831",
+            "response_email_body": "Hi Kiran,\n\nThank you for reaching out and providing those details. I understand that your production environment is experiencing intermittent failures where workflows aren't executing fully after receiving a webhook payload. I know how critical it is for these triggers to work reliably in a live environment.\n\nI have escalated this to our technical engineering team to investigate the logs from the past 24 hours. Given the impact on your production workflow, we have prioritized this as High. You can expect a follow-up or a request for additional details from one of our specialists within the next hour.\n\nThank you for your patience as we work to resolve this.\n\nBest regards,\n\nSupport Operations Team"
+          }
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "Alert to Specific Department Channel": [
+      {
+        "json": {
+          "ok": true,
+          "channel": "C0AHNMUFKTR",
+          "message": {
+            "user": "U0AJH7VST6D",
+            "type": "message",
+            "ts": "1772564698.913909",
+            "bot_id": "B0AHNSH8QF9",
+            "app_id": "A0AJ0T3T337",
+            "text": "Inconsistent execution of workflow downstream nodes following successful webhook payload delivery in production.",
+            "team": "T0AJYDEQH2L",
+            "bot_profile": {
+              "id": "B0AHNSH8QF9",
+              "app_id": "A0AJ0T3T337",
+              "user_id": "U0AJH7VST6D",
+              "name": "n8n - Support System Triage",
+              "icons": {
+                "image_36": "https://a.slack-edge.com/80588/img/plugins/app/bot_36.png",
+                "image_48": "https://a.slack-edge.com/80588/img/plugins/app/bot_48.png",
+                "image_72": "https://a.slack-edge.com/80588/img/plugins/app/service_72.png"
+              },
+              "deleted": false,
+              "updated": 1772498375,
+              "team_id": "T0AJYDEQH2L"
+            },
+            "blocks": [
+              {
+                "type": "rich_text",
+                "block_id": "2vi/X",
+                "elements": [
+                  {
+                    "type": "rich_text_section",
+                    "elements": [
+                      {
+                        "type": "text",
+                        "text": "Inconsistent execution of workflow downstream nodes following successful webhook payload delivery in production."
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "message_timestamp": "1772564698.913909"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "Create a database page": [
+      {
+        "json": {
+          "object": "page",
+          "id": "31825c0e-a33b-8121-881f-cbca2ea36c62",
+          "created_time": "2026-03-03T19:05:00.000Z",
+          "last_edited_time": "2026-03-03T19:05:00.000Z",
+          "created_by": {
+            "object": "user",
+            "id": "31825c0e-a33b-81b6-8788-002780f06bd3"
+          },
+          "last_edited_by": {
+            "object": "user",
+            "id": "31825c0e-a33b-81b6-8788-002780f06bd3"
+          },
+          "cover": null,
+          "icon": null,
+          "parent": {
+            "type": "database_id",
+            "database_id": "31825c0e-a33b-802a-8e7e-f5e0922c362d"
+          },
+          "archived": false,
+          "in_trash": false,
+          "is_locked": false,
+          "properties": {
+            "Priority": {
+              "id": "%3AfJ%3D",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "High",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "High",
+                  "href": null
+                }
+              ]
+            },
+            "Customer Email": {
+              "id": "%3C%5BRD",
+              "type": "email",
+              "email": "kp1125patel@gmail.com"
+            },
+            "Status": {
+              "id": "P%5B%5Di",
+              "type": "status",
+              "status": {
+                "id": "8dcecc18-eb39-4b64-b5c9-96e4a3cd246c",
+                "name": "New",
+                "color": "orange"
+              }
+            },
+            "Category": {
+              "id": "_vxj",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "Technical",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "Technical",
+                  "href": null
+                }
+              ]
+            },
+            "Core Issue": {
+              "id": "a%7CM%5B",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "Inconsistent execution of workflow downstream nodes following successful webhook payload delivery in production.",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "Inconsistent execution of workflow downstream nodes following successful webhook payload delivery in production.",
+                  "href": null
+                }
+              ]
+            },
+            "Date Received": {
+              "id": "fToj",
+              "type": "date",
+              "date": {
+                "start": "2026-03-03",
+                "end": null,
+                "time_zone": null
+              }
+            },
+            "Customer Name": {
+              "id": "title",
+              "type": "title",
+              "title": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "KiranPatel",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "KiranPatel",
+                  "href": null
+                }
+              ]
+            }
+          },
+          "url": "https://www.notion.so/KiranPatel-31825c0ea33b8121881fcbca2ea36c62",
+          "public_url": null,
+          "request_id": "bd295d59-844b-41f2-b1e0-67835fb3ded6"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "General Support Ticket Notification": [
+      {
+        "json": {
+          "ok": true,
+          "channel": "C0AJ6N666Q5",
+          "message": {
+            "user": "U0AJH7VST6D",
+            "type": "message",
+            "ts": "1772564712.229559",
+            "bot_id": "B0AHNSH8QF9",
+            "app_id": "A0AJ0T3T337",
+            "text": ":ticket: *New High Priority Ticket* \n*Customer:* KiranPatel\n*Category:* Technical\n*Issue:* Inconsistent execution of workflow downstream nodes following successful webhook payload delivery in production. \n*Email:* <mailto:kp1125patel@gmail.com|kp1125patel@gmail.com>\nView in Notion → <https://www.notion.so/31825c0ea33b802a8e7ef5e0922c362d?v=31825c0ea33b800a9279000c57bd657f&amp;source=copy_link>\n_Automated with this <https://n8n.465768.xyz/workflow/7ERvSe50xaycLrBZbYasZ?utm_source=n8n-internal&amp;utm_medium=powered_by&amp;utm_campaign=n8n-nodes-base.slack_f3d909286a843c4b65b69062d633d18150a5d1973ddfcb7920746576daeef0e2|n8n workflow>_",
+            "team": "T0AJYDEQH2L",
+            "bot_profile": {
+              "id": "B0AHNSH8QF9",
+              "app_id": "A0AJ0T3T337",
+              "user_id": "U0AJH7VST6D",
+              "name": "n8n - Support System Triage",
+              "icons": {
+                "image_36": "https://a.slack-edge.com/80588/img/plugins/app/bot_36.png",
+                "image_48": "https://a.slack-edge.com/80588/img/plugins/app/bot_48.png",
+                "image_72": "https://a.slack-edge.com/80588/img/plugins/app/service_72.png"
+              },
+              "deleted": false,
+              "updated": 1772498375,
+              "team_id": "T0AJYDEQH2L"
+            },
+            "blocks": [
+              {
+                "type": "rich_text",
+                "block_id": "kxA8J",
+                "elements": [
+                  {
+                    "type": "rich_text_section",
+                    "elements": [
+                      {
+                        "type": "emoji",
+                        "name": "ticket",
+                        "unicode": "1f3ab"
+                      },
+                      {
+                        "type": "text",
+                        "text": " "
+                      },
+                      {
+                        "type": "text",
+                        "text": "New High Priority Ticket",
+                        "style": {
+                          "bold": true
+                        }
+                      },
+                      {
+                        "type": "text",
+                        "text": " \n"
+                      },
+                      {
+                        "type": "text",
+                        "text": "Customer:",
+                        "style": {
+                          "bold": true
+                        }
+                      },
+                      {
+                        "type": "text",
+                        "text": " KiranPatel\n"
+                      },
+                      {
+                        "type": "text",
+                        "text": "Category:",
+                        "style": {
+                          "bold": true
+                        }
+                      },
+                      {
+                        "type": "text",
+                        "text": " Technical\n"
+                      },
+                      {
+                        "type": "text",
+                        "text": "Issue:",
+                        "style": {
+                          "bold": true
+                        }
+                      },
+                      {
+                        "type": "text",
+                        "text": " Inconsistent execution of workflow downstream nodes following successful webhook payload delivery in production. \n"
+                      },
+                      {
+                        "type": "text",
+                        "text": "Email:",
+                        "style": {
+                          "bold": true
+                        }
+                      },
+                      {
+                        "type": "text",
+                        "text": " "
+                      },
+                      {
+                        "type": "link",
+                        "url": "mailto:kp1125patel@gmail.com",
+                        "text": "kp1125patel@gmail.com"
+                      },
+                      {
+                        "type": "text",
+                        "text": "\nView in Notion → "
+                      },
+                      {
+                        "type": "link",
+                        "url": "https://www.notion.so/31825c0ea33b802a8e7ef5e0922c362d?v=31825c0ea33b800a9279000c57bd657f&amp;source=copy_link",
+                        "text": "https://www.notion.so/31825c0ea33b802a8e7ef5e0922c362d?v=31825c0ea33b800a9279000c57bd657f&source=copy_link"
+                      },
+                      {
+                        "type": "text",
+                        "text": "\n"
+                      },
+                      {
+                        "type": "text",
+                        "text": "Automated with this ",
+                        "style": {
+                          "italic": true
+                        }
+                      },
+                      {
+                        "type": "link",
+                        "url": "https://n8n.465768.xyz/workflow/7ERvSe50xaycLrBZbYasZ?utm_source=n8n-internal&amp;utm_medium=powered_by&amp;utm_campaign=n8n-nodes-base.slack_f3d909286a843c4b65b69062d633d18150a5d1973ddfcb7920746576daeef0e2",
+                        "text": "n8n workflow",
+                        "style": {
+                          "italic": true
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          "message_timestamp": "1772564712.229559"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ],
+    "Draft first response": [
+      {
+        "json": {
+          "id": "r-8098747039654254174",
+          "message": {
+            "id": "19cb5299fa665ca4",
+            "threadId": "19cb5299fa665ca4",
+            "labelIds": [
+              "DRAFT"
+            ]
+          }
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Draft first response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Alert to Specific Department Channel",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Alert to Specific Department Channel": {
+      "main": [
+        []
+      ]
+    },
+    "Create a database page": {
+      "main": [
+        [
+          {
+            "node": "General Support Ticket Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "General Support Ticket Notification": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Draft first response": {
+      "main": [
+        [
+          {
+            "node": "Create a database page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "f0db2230-a72f-4fc4-9251-19c4c1ae6e43",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f3d909286a843c4b65b69062d633d18150a5d1973ddfcb7920746576daeef0e2"
+  },
+  "id": "7ERvSe50xaycLrBZbYasZ",
+  "tags": []
+}
